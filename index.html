@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>毛毛格擋</title>
+<link rel="stylesheet" href="faker.css">
 <style>
   html, body {
     margin: 0;
@@ -256,8 +257,8 @@
     cursor: pointer;
     touch-action: manipulation;
   }
-  #pause-btn {
-    margin-top: 12px;
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+  #pause-btn, a.back-portal {
     min-height: 40px;
     background: transparent;
     color: #cfcfcf;
@@ -267,7 +268,13 @@
     font: inherit;
     cursor: pointer;
     touch-action: manipulation;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
+  #end a.back-portal { color: #1a1a1a; border-color: #1a1a1a; background: transparent; }
+  #retry-bar { flex-wrap: wrap; gap: 12px; }
   @media (max-width: 860px) {
     body {
       flex-direction: column;
@@ -299,7 +306,7 @@
     #hp { font-size: 22px; }
     .help, #side-board, #side-board-title { display: none; }
     .langs { margin-top: 8px; }
-    .langs button, #pause-btn { min-height: 44px; }
+    .langs button, #pause-btn, a.back-portal { min-height: 44px; }
     #end { padding: 24px 16px 8px; }
     #end-score { font-size: 48px; }
     #end-title { font-size: 30px; margin: 12px 0 8px; }
@@ -335,7 +342,10 @@
     <div class="status" id="status">載入中</div>
     <div class="meta" id="meta"></div>
     <div class="help" id="help"></div>
-    <button type="button" id="pause-btn">暫停</button>
+    <div class="actions">
+      <button type="button" id="pause-btn">暫停</button>
+      <a class="back-portal" id="back-portal" href="/" target="_top">回主選單</a>
+    </div>
     <div class="board-title" id="side-board-title"></div>
     <ol class="board" id="side-board"></ol>
     <div class="langs" id="langs">
@@ -359,6 +369,7 @@
     <ol class="board" id="end-board"></ol>
     <div id="retry-bar">
       <button type="button" id="retry-btn">再試一次</button>
+      <a class="back-portal" id="back-portal-end" href="/" target="_top">回主選單</a>
     </div>
     <div class="langs">
       <button type="button" data-lang="zh-Hant">繁體</button>
@@ -366,6 +377,8 @@
       <button type="button" data-lang="zh-Hans">简体</button>
     </div>
   </div>
+<script src="faker-policy.js"></script>
+<script src="faker-ui.js"></script>
 <script>
 const HP_MAX = 1000;
 const PUNCH_DAMAGE = 1;
@@ -396,6 +409,12 @@ const STR = {
       "太早點不會擋，也不扣血。"
     ],
     startHint: "空白鍵也能擋。Esc 暫停。",
+    fakerTitle: "Faker 上場",
+    fakerStart: [
+      "反應時間 106 到 120 毫秒，最快 106。金環亮了才按。",
+      "他不會按錯。金環比這次反應還短，就會來不及。"
+    ],
+    fakerHint: "循環播放 GODS ft. NewJeans · Worlds 2023。成績記成 Faker (AI)。",
     help: "金環亮起時點擊或按空白鍵。按住不放不會擋。Esc 暫停。",
     loading: "載入中",
     missingTitle: "畫面檔沒載入",
@@ -417,10 +436,11 @@ const STR = {
     rate: (n) => n.toFixed(1) + " 拳／秒",
     meta: (b, l, p) => "格擋 " + b + " · 打中 " + l + " · 出拳 " + p,
     died: "您已陣亡",
-    p1: "你知道嗎？ 貓咪的瘋狂連擊反射只需 20 至 70 毫秒，而人類的極限反應速度只有 150 毫秒。當那一雙肉墊像閃電般連環襲來時，肉眼根本無法捕捉。",
-    p2: "雖然你撐過了 1000 點血量的暴風雨，但從生理學角度來說，你是不可能格擋下每一拳的。",
+    p1: "你知道嗎？貓連打的反射大約 20 到 70 毫秒，人最快大概也只有 100 毫秒左右。肉掌一下一下打過來的時候，眼睛根本跟不上。",
+    p2: "這 1000 點血你是撐住了，但每一拳都格開，人做不到。",
     revive: "再試一次",
     pauseBtn: "暫停",
+    back: "回主選單",
     name: "名稱",
     save: "記入排行",
     saved: "已記入排行榜。",
@@ -429,6 +449,7 @@ const STR = {
     board: "最高紀錄",
     empty: "還沒有紀錄。",
     boardDown: "排行榜讀不到。",
+    localTag: "未上傳",
     clock: (sec) => sec.toFixed(2) + " 秒"
   },
   en: {
@@ -444,6 +465,12 @@ const STR = {
       "Clicking early does not block, and it does not cost HP."
     ],
     startHint: "Space also blocks. Esc pauses.",
+    fakerTitle: "Faker is in",
+    fakerStart: [
+      "Reaction 106–120 ms, best 106. He presses only while the gold ring is lit.",
+      "The press is always the right one. If the ring is shorter than his reaction, he is late."
+    ],
+    fakerHint: "GODS ft. NewJeans · Worlds 2023, looped",
     help: "Click or press Space while the gold ring is lit. Holding the button does not block. Esc pauses.",
     loading: "Loading",
     missingTitle: "Frames missing",
@@ -465,10 +492,11 @@ const STR = {
     rate: (n) => n.toFixed(1) + " punches/s",
     meta: (b, l, p) => "Blocked " + b + " · Landed " + l + " · Punches " + p,
     died: "YOU DIED",
-    p1: "Did you know? A cat's rapid punch reflex takes only 20 to 70 milliseconds, while the absolute human maximum reaction speed is around 150 milliseconds. When those furry paws strike like lightning, they easily bypass your conscious mind.",
-    p2: "You held your ground for 1000 HP, but technically speaking, it was physically impossible to parry them all.",
+    p1: "Did you know? A cat's flurry reflex is about 20 to 70 milliseconds. The fastest a person can react is around 100 milliseconds. When the paws come one after another, your eyes cannot keep up.",
+    p2: "You lasted through 1000 HP, but no person can parry every punch.",
     revive: "Retry",
     pauseBtn: "Pause",
+    back: "Back to menu",
     name: "Name",
     save: "Save score",
     saved: "Saved to the board.",
@@ -477,6 +505,7 @@ const STR = {
     board: "High scores",
     empty: "No scores yet.",
     boardDown: "The board could not be loaded.",
+    localTag: "This device",
     clock: (sec) => sec.toFixed(2) + " s"
   },
   "zh-Hans": {
@@ -492,6 +521,12 @@ const STR = {
       "太早点不会挡，也不扣血。"
     ],
     startHint: "空格键也能挡。Esc 暂停。",
+    fakerTitle: "Faker 上场",
+    fakerStart: [
+      "反应时间 106 到 120 毫秒，最快 106。金环亮了才按。",
+      "他不会按错。金环比这次反应还短，就会来不及。"
+    ],
+    fakerHint: "循环播放 GODS ft. NewJeans · Worlds 2023。成绩记成 Faker (AI)。",
     help: "金环亮起时点击或按空格。按住不放不会挡。Esc 暂停。",
     loading: "加载中",
     missingTitle: "画面档没加载",
@@ -513,10 +548,11 @@ const STR = {
     rate: (n) => n.toFixed(1) + " 拳／秒",
     meta: (b, l, p) => "格挡 " + b + " · 打中 " + l + " · 出拳 " + p,
     died: "您已阵亡",
-    p1: "你知道吗？ 猫咪的疯狂连击反射只需 20 至 70 毫秒，而人类的极限反应速度只有 150 毫秒。当那一双肉垫像闪电般连环袭来时，肉眼根本无法捕捉。",
-    p2: "虽然你撑过了 1000 点血量的暴风雨，但从生理学角度来说，你是不可能格挡下每一拳的。",
+    p1: "你知道吗？猫连打的反射大约 20 到 70 毫秒，人最快大概也只有 100 毫秒左右。肉掌一下一下打过来的时候，眼睛根本跟不上。",
+    p2: "这 1000 点血你是撑住了，但每一拳都格开，人做不到。",
     revive: "再试一次",
     pauseBtn: "暂停",
+    back: "回主菜单",
     name: "名称",
     save: "记入排行",
     saved: "已记入排行榜。",
@@ -525,6 +561,7 @@ const STR = {
     board: "最高纪录",
     empty: "还没有纪录。",
     boardDown: "排行榜读不到。",
+    localTag: "未上传",
     clock: (sec) => sec.toFixed(2) + " 秒"
   }
 };
@@ -574,12 +611,19 @@ let audioCtx = null;
 let lastList = [];
 let lastHighlight = "";
 let boardNote = "";
+let boardToken = 0;
+let fakerPosted = false;
+let fakerLiveRow = null;
+let fakerLiveAt = "";
+let fakerLivePosted = 0;
+let fakerSwing = null;
 
 function T() { return STR[lang] || STR["zh-Hant"]; }
 
 function loadLang() {
+  const query = new URLSearchParams(location.search).get("lang");
   const saved = localStorage.getItem(LANG_KEY);
-  lang = STR[saved] ? saved : "zh-Hant";
+  lang = STR[query] ? query : (STR[saved] ? saved : "zh-Hant");
 }
 
 function setStatus(key) {
@@ -623,9 +667,12 @@ function showOverlay(title, lines, hint) {
   overlay.hidden = false;
 }
 
+function fakerOn() { return window.MomoFaker && MomoFaker.enabled; }
+
 function showStart() {
   const t = T();
-  showOverlay(t.startTitle, t.start, t.startHint);
+  if (fakerOn()) showOverlay(t.fakerTitle, t.fakerStart, t.fakerHint);
+  else showOverlay(t.startTitle, t.start, t.startHint);
   setStatus("start");
 }
 
@@ -664,6 +711,10 @@ function fillEndCopy() {
   document.getElementById("end-p2").textContent = t.p2;
   document.getElementById("retry-btn").textContent = t.revive;
   document.getElementById("pause-btn").textContent = t.pauseBtn;
+  document.getElementById("back-portal").textContent = t.back;
+  document.getElementById("back-portal-end").textContent = t.back;
+  const home = location.hostname.endsWith("github.io") ? "https://me0wx-lr.github.io/momo-portal/" : "/";
+  document.querySelectorAll(".back-portal").forEach((link) => { link.href = home; });
   document.getElementById("end-score").textContent = t.clock(survivedMs / 1000);
 }
 
@@ -671,6 +722,7 @@ function setLang(next) {
   if (!STR[next]) return;
   lang = next;
   localStorage.setItem(LANG_KEY, lang);
+  if (fakerOn()) MomoFaker.syncLang(lang);
   applyStatic();
   if (state === "start" && started) showStart();
   if (paused) showPause();
@@ -689,6 +741,11 @@ function markLoaded(img) {
 }
 
 loadLang();
+if (fakerOn()) {
+  document.body.dataset.faker = "1";
+  MomoFaker.mount("parry");
+  MomoFaker.syncLang(lang);
+}
 
 for (let i = 0; i < FRAME_COUNT; i++) {
   const img = new Image();
@@ -770,6 +827,17 @@ function paintClock(now) {
   const at = state === "dead" ? fightStartedAt + survivedMs : (paused ? frozenAt : now);
   const rate = state === "start" ? START_RATE : punchRate(at);
   rateEl.textContent = t.rate(rate);
+  if (!fakerOn() || state === "start" || state === "dead" || paused) return;
+  fakerLiveRow = {
+    name: MomoFaker.NAME,
+    ms: Math.round(ms),
+    at: fakerLiveAt || new Date().toISOString(),
+    live: true
+  };
+  if (now - fakerLivePosted < 200) return;
+  fakerLivePosted = now;
+  renderBoards();
+  MomoFaker.tell({ type: "live", game: "parry", row: { name: MomoFaker.NAME, ms: fakerLiveRow.ms } });
 }
 
 function ensureAudio() {
@@ -815,11 +883,25 @@ function ready() {
   showStart();
   paintClock(performance.now());
   loadBoard();
+  if (fakerOn()) {
+    const rt = MomoFaker.reaction();
+    MomoFaker.note({ action: "begin", rt, made: true });
+    MomoFaker.planAt(performance.now() + rt, (at) => {
+      if (state === "start") begin(at);
+    });
+    MomoFaker.startMusic();
+  }
   requestAnimationFrame(tick);
 }
 
 function begin(now) {
   hp = HP_MAX;
+  fakerPosted = false;
+  fakerLiveAt = new Date().toISOString();
+  fakerLivePosted = 0;
+  fakerLiveRow = null;
+  if (fakerOn()) MomoFaker.clearPlan();
+  fakerSwing = null;
   punchIndex = 0;
   punches = 0;
   blocked = 0;
@@ -859,9 +941,43 @@ function arm(at) {
   setBanner("", "");
   setStatus(punchIndex % 2 === 0 ? "left" : "right");
   view.style.transitionDuration = Math.min(160, Math.max(16, timing.windupMs)) + "ms";
+  if (!fakerOn()) return;
+  const punch = punchIndex;
+  const tellAt = at;
+  const openAt = windupEnds;
+  const deadline = windowEnds;
+  const cycle = 1000 / punchRate(at);
+  const nominalCenter = at + cycle * 0.69;
+  const focus = FakerPolicy.focusFromElapsed(at - fightStartedAt);
+  const decision = MomoFaker.decideParryTell(tellAt, openAt, deadline, nominalCenter, focus);
+  MomoFaker.note(decision);
+  MomoFaker.clearPlan();
+  fakerSwing = { punch, at: decision.at, openAt, deadline, made: decision.made };
+  MomoFaker.planAt(decision.at, () => {
+    if (!fakerSwing || fakerSwing.punch !== punch) return;
+    MomoFaker.flashAttempt(!!decision.made);
+  });
 }
 
-function openWindow() {
+function shiftFakerSwing(gap) {
+  if (!fakerSwing || !gap) return;
+  fakerSwing.at += gap;
+  fakerSwing.openAt += gap;
+  fakerSwing.deadline += gap;
+}
+
+function fakerTakeSwing(now) {
+  if (!fakerOn() || !fakerSwing || fakerSwing.punch !== punchIndex || !fakerSwing.made) return false;
+  if (now < fakerSwing.at) return false;
+  const swing = fakerSwing;
+  if (state === "windup") openWindow(swing.openAt);
+  if (state !== "open") return false;
+  blockPunch(Math.min(swing.at, swing.deadline));
+  fakerSwing = null;
+  return true;
+}
+
+function openWindow(now) {
   setState("open");
   setPose("open");
   setBanner(T().nowBanner, "now");
@@ -910,6 +1026,7 @@ function die(at) {
   setState("dead");
   setStatus("down");
   setBanner("", "");
+  fakerLiveRow = null;
   showEnd();
 }
 
@@ -922,7 +1039,9 @@ function showEnd() {
   saveMsg.textContent = "";
   endEl.hidden = false;
   paintClock(performance.now());
-  loadBoard();
+  endEl.scrollIntoView({ block: "start" });
+  if (fakerOn()) fakerSave();
+  else loadBoard();
 }
 
 function act(now) {
@@ -938,6 +1057,8 @@ function act(now) {
       windupEnds += gap;
       windowEnds += gap;
       cycleEnds += gap;
+      if (fakerOn()) MomoFaker.shift(gap);
+      shiftFakerSwing(gap);
     }
     overlay.hidden = true;
     setStatus(state === "open" ? "now" : (punchIndex % 2 === 0 ? "left" : "right"));
@@ -987,14 +1108,18 @@ function tick(now) {
     windowEnds += extra;
     cycleEnds += extra;
     fightStartedAt += extra;
+    shiftFakerSwing(extra);
+    if (fakerOn()) MomoFaker.shift(extra);
   }
   lastNow = now;
+  if (fakerOn()) MomoFaker.poll(now);
   let guard = 0;
   while (guard++ < 24 && state !== "dead" && state !== "start" && state !== "paused") {
+    if (fakerTakeSwing(now)) continue;
     if (state === "wait" && now >= phaseUntil) arm(phaseUntil);
     else if (state === "windup" && now >= windupEnds) {
       if (now >= windowEnds) miss();
-      else openWindow();
+      else openWindow(now);
     } else if (state === "open" && now >= windowEnds) miss();
     else if (state === "recover" && now >= cycleEnds) arm(cycleEnds);
     else break;
@@ -1025,8 +1150,9 @@ function normalize(list) {
     seen.add(id);
     rows.push({ name, ms, at });
   }
-  rows.sort((a, b) => b.ms - a.ms || (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
-  return rows.slice(0, KEEP_N);
+  const latest = FakerPolicy.keepLatest(rows);
+  latest.sort((a, b) => b.ms - a.ms || (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+  return latest.slice(0, KEEP_N);
 }
 
 function readLocal() {
@@ -1049,9 +1175,16 @@ function formatWhen(iso) {
   return date.getFullYear() + "-" + p(date.getMonth() + 1) + "-" + p(date.getDate()) + " " + p(date.getHours()) + ":" + p(date.getMinutes());
 }
 
+function boardRows(list) {
+  const rows = list.slice();
+  if (fakerLiveRow && state !== "dead") rows.push(fakerLiveRow);
+  rows.sort((a, b) => b.ms - a.ms || (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+  return rows.slice(0, TOP_N);
+}
+
 function renderInto(el, list) {
   el.replaceChildren();
-  const top = list.slice(0, TOP_N);
+  const top = boardRows(list);
   if (!top.length) {
     const li = document.createElement("li");
     li.className = "empty";
@@ -1063,14 +1196,28 @@ function renderInto(el, list) {
     const li = document.createElement("li");
     const id = row.name + "|" + row.ms + "|" + row.at;
     if (id === lastHighlight) li.className = "mine";
+    if (row.name === FakerPolicy.NAME) li.classList.add("faker");
+    if (row.live) li.classList.add("live");
     const rank = document.createElement("span");
     rank.textContent = String(i + 1);
     const name = document.createElement("span");
     name.textContent = row.name;
+    if (row.live) {
+      const badge = document.createElement("span");
+      badge.className = "live-badge";
+      badge.textContent = "LIVE";
+      name.append(badge);
+    }
+    if (row.localOnly) {
+      const badge = document.createElement("span");
+      badge.className = "local-badge";
+      badge.textContent = T().localTag;
+      name.append(badge);
+    }
     const score = document.createElement("span");
     score.textContent = (row.ms / 1000).toFixed(2) + " " + T().unit;
     const when = document.createElement("span");
-    when.textContent = formatWhen(row.at);
+    when.textContent = row.live ? "LIVE" : formatWhen(row.at);
     li.append(rank, name, score, when);
     el.append(li);
   });
@@ -1099,17 +1246,71 @@ async function putRemote(list) {
 }
 
 async function loadBoard() {
+  const token = ++boardToken;
   const local = readLocal();
   try {
     const remote = await fetchRemote();
-    lastList = normalize(remote.concat(local));
+    if (token !== boardToken) return;
+    try { if (remote.length) sessionStorage.setItem("momo-parry-remote-snapshot", JSON.stringify(remote)); } catch (err) {}
+    const merged = normalize(remote.concat(local));
+    lastList = FakerPolicy.tagLocal(remote, merged, "parry");
     boardNote = "";
-    writeLocal(lastList);
+    writeLocal(merged);
   } catch (err) {
-    lastList = local;
+    if (token !== boardToken) return;
+    lastList = FakerPolicy.tagLocal(null, local, "parry");
     boardNote = local.length ? "" : T().boardDown;
   }
   renderBoards();
+}
+
+async function commitScore(name, remember) {
+  if (Math.round(survivedMs) <= 0) return;
+  const at = new Date().toISOString();
+  const row = { name, ms: Math.round(survivedMs), at };
+  if (remember) localStorage.setItem(NAME_KEY, name);
+  lastHighlight = name + "|" + row.ms + "|" + at;
+  fakerLiveRow = null;
+  let remote = [];
+  let online = false;
+  try {
+    remote = await fetchRemote();
+    online = true;
+  } catch (err) {
+    online = false;
+  }
+  const next = normalize(remote.concat(readLocal(), [row]));
+  writeLocal(next);
+  lastList = FakerPolicy.tagLocal(online ? remote : null, next, "parry");
+  renderBoards();
+  const allowRemote = online && (!fakerOn() || FakerPolicy.plausibleParry(row.ms));
+  let shared = false;
+  if (allowRemote) {
+    try {
+      const remembered = JSON.parse(sessionStorage.getItem("momo-parry-remote-snapshot") || "[]");
+      const latest = await fetchRemote();
+      let union = normalize([].concat(latest, remembered, next));
+      await putRemote(union);
+      const seen = await fetchRemote();
+      const healed = normalize([].concat(seen, union));
+      const seenIds = new Set(seen.map((item) => item.name + "|" + item.ms + "|" + item.at));
+      if (healed.some((item) => !seenIds.has(item.name + "|" + item.ms + "|" + item.at))) {
+        await putRemote(healed);
+        union = healed;
+      }
+      try { sessionStorage.setItem("momo-parry-remote-snapshot", JSON.stringify(union)); } catch (err) {}
+      writeLocal(union);
+      lastList = FakerPolicy.tagLocal(union, union, "parry");
+      shared = true;
+      renderBoards();
+    } catch (err) {
+      shared = false;
+    }
+  }
+  row.localOnly = !shared;
+  if (fakerOn()) MomoFaker.tell({ type: "saved", game: "parry", row });
+  saveMsg.textContent = shared ? T().saved : T().savedLocal;
+  saveBtn.disabled = true;
 }
 
 async function submitScore(event) {
@@ -1120,38 +1321,18 @@ async function submitScore(event) {
     saveMsg.textContent = T().needName;
     return;
   }
-  if (Math.round(survivedMs) <= 0) return;
   saveMsg.textContent = "";
   saveBtn.disabled = true;
-  const at = new Date().toISOString();
-  const row = { name, ms: Math.round(survivedMs), at };
-  localStorage.setItem(NAME_KEY, name);
-  lastHighlight = name + "|" + row.ms + "|" + at;
-  let base = readLocal();
-  let online = false;
-  try {
-    base = normalize((await fetchRemote()).concat(base));
-    online = true;
-  } catch (err) {
-    online = false;
-  }
-  const next = normalize(base.concat([row]));
-  writeLocal(next);
-  lastList = next;
-  renderBoards();
-  if (!online) {
-    saveMsg.textContent = T().savedLocal;
-    saveBtn.disabled = true;
-    return;
-  }
-  try {
-    await putRemote(next);
-    saveMsg.textContent = T().saved;
-    saveBtn.disabled = true;
-  } catch (err) {
-    saveMsg.textContent = T().savedLocal;
-    saveBtn.disabled = true;
-  }
+  await commitScore(name, true);
+}
+
+function fakerSave() {
+  if (!fakerOn() || fakerPosted) return;
+  fakerPosted = true;
+  nameEl.value = MomoFaker.NAME;
+  saveBtn.disabled = true;
+  saveMsg.textContent = "";
+  commitScore(MomoFaker.NAME, false);
 }
 
 document.getElementById("score-form").addEventListener("submit", submitScore);
@@ -1178,8 +1359,9 @@ document.addEventListener("click", (event) => {
 });
 
 window.addEventListener("pointerdown", (event) => {
+  if (fakerOn()) return;
   if (event.button !== 0) return;
-  if (event.target.closest("[data-lang], #score-form, #retry-btn, #pause-btn")) return;
+  if (event.target.closest("[data-lang], #score-form, #retry-btn, #pause-btn, .back-portal")) return;
   if (state === "dead") return;
   event.preventDefault();
   act(performance.now());
@@ -1194,6 +1376,10 @@ window.addEventListener("keydown", (event) => {
     return;
   }
   if (event.code === "Space") {
+    if (fakerOn()) {
+      event.preventDefault();
+      return;
+    }
     if (state === "dead") {
       if (!event.target.closest("#retry-btn")) event.preventDefault();
       return;
@@ -1205,6 +1391,10 @@ window.addEventListener("keydown", (event) => {
 
 loadLang();
 applyStatic();
+setInterval(() => {
+  if (document.hidden) return;
+  loadBoard();
+}, 5000);
 </script>
 </body>
 </html>
