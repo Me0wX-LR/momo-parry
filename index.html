@@ -258,7 +258,7 @@
     touch-action: manipulation;
   }
   .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
-  #pause-btn, a.back-portal {
+  #pause-btn, #upload-btn, a.back-portal {
     min-height: 40px;
     background: transparent;
     color: #cfcfcf;
@@ -306,7 +306,7 @@
     #hp { font-size: 22px; }
     .help, #side-board, #side-board-title { display: none; }
     .langs { margin-top: 8px; }
-    .langs button, #pause-btn, a.back-portal { min-height: 44px; }
+    .langs button, #pause-btn, #upload-btn, a.back-portal { min-height: 44px; }
     #end { padding: 24px 16px 8px; }
     #end-score { font-size: 48px; }
     #end-title { font-size: 30px; margin: 12px 0 8px; }
@@ -344,6 +344,8 @@
     <div class="help" id="help"></div>
     <div class="actions">
       <button type="button" id="pause-btn">暫停</button>
+      <button type="button" id="upload-btn">再上傳</button>
+      <p id="upload-msg" class="help"></p>
       <a class="back-portal" id="back-portal" href="/" target="_top">回主選單</a>
     </div>
     <div class="board-title" id="side-board-title"></div>
@@ -443,6 +445,10 @@ const STR = {
     back: "回主選單",
     name: "名稱",
     save: "記入排行",
+    upload: "再上傳",
+    uploadLimit: "線上排行榜今天的寫入次數用完了。現有成績沒有被改掉。配額重置之後再按「再上傳」。",
+    uploadNone: "這台電腦沒有未上傳的成績。",
+    uploadOk: "已送到線上排行榜。",
     saved: "已記入排行榜。",
     savedLocal: "線上排行這時寫不進去，這筆先留在這台電腦。",
     needName: "先輸入名稱，最多 10 個字。",
@@ -499,6 +505,10 @@ const STR = {
     back: "Back to menu",
     name: "Name",
     save: "Save score",
+    upload: "Upload again",
+    uploadLimit: "The shared board used up today's writes. Existing scores were not changed. Press Upload again after the daily quota resets.",
+    uploadNone: "This computer has no scores waiting to upload.",
+    uploadOk: "Sent to the shared board.",
     saved: "Saved to the board.",
     savedLocal: "The online board did not take this one. It is kept on this computer.",
     needName: "Enter a name, up to 10 characters.",
@@ -555,6 +565,10 @@ const STR = {
     back: "回主菜单",
     name: "名称",
     save: "记入排行",
+    upload: "再上传",
+    uploadLimit: "线上排行榜今天的写入次数用完了。现有成绩没有被改掉。配额重置后再按「再上传」。",
+    uploadNone: "这台电脑没有未上传的成绩。",
+    uploadOk: "已送到线上排行榜。",
     saved: "已记入排行榜。",
     savedLocal: "线上排行这时写不进去，这笔先留在这台电脑。",
     needName: "先输入名称，最多 10 个字。",
@@ -612,6 +626,7 @@ let lastList = [];
 let lastHighlight = "";
 let boardNote = "";
 let boardToken = 0;
+let lastUploadWrote = false;
 let fakerPosted = false;
 let fakerLiveRow = null;
 let fakerLiveAt = "";
@@ -711,6 +726,7 @@ function fillEndCopy() {
   document.getElementById("end-p2").textContent = t.p2;
   document.getElementById("retry-btn").textContent = t.revive;
   document.getElementById("pause-btn").textContent = t.pauseBtn;
+  document.getElementById("upload-btn").textContent = t.upload;
   document.getElementById("back-portal").textContent = t.back;
   document.getElementById("back-portal-end").textContent = t.back;
   const home = location.hostname.endsWith("github.io") ? "https://me0wx-lr.github.io/momo-portal/" : "/";
@@ -1228,12 +1244,19 @@ function renderBoards() {
   renderInto(document.getElementById("end-board"), lastList);
 }
 
-async function fetchRemote() {
+async function fetchRaw() {
   const resp = await fetch(BOARD_URL, { cache: "no-store" });
   if (resp.status === 404) return [];
-  if (!resp.ok) throw new Error(String(resp.status));
-  const data = await resp.json();
-  return normalize(Array.isArray(data) ? data : []);
+  const text = await resp.text();
+  if (!resp.ok) throw new Error(text || String(resp.status));
+  if (!text) return [];
+  const data = JSON.parse(text);
+  if (!Array.isArray(data)) throw new Error("shape");
+  return data;
+}
+
+async function fetchRemote() {
+  return normalize(await fetchRaw());
 }
 
 async function putRemote(list) {
@@ -1242,7 +1265,45 @@ async function putRemote(list) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(list)
   });
-  if (!resp.ok) throw new Error(String(resp.status));
+  if (!resp.ok) throw new Error(await resp.text() || String(resp.status));
+}
+
+function readSnapshot(key) {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(key) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    return [];
+  }
+}
+function parryBody(rows) {
+  return rows.map((row) => ({ name: row.name, ms: Number(row.ms), at: row.at }));
+}
+function uploadFailText(err) {
+  const raw = err && err.message ? String(err.message) : "";
+  if (FakerPolicy.uploadLimited(raw)) return T().uploadLimit;
+  return T().savedLocal + (raw ? " " + raw : "");
+}
+async function uploadMerged(extra) {
+  const remembered = readSnapshot("momo-parry-remote-snapshot");
+  const latest = await fetchRaw();
+  const union = FakerPolicy.unionRows([latest, remembered, readLocal(), extra || []], "parry");
+  if (!FakerPolicy.coversRows(union, latest, "parry")) throw new Error("would drop scores");
+  const body = parryBody(union);
+  if (FakerPolicy.coversRows(latest, body, "parry")) {
+    try { sessionStorage.setItem("momo-parry-remote-snapshot", JSON.stringify(latest)); } catch (err) {}
+    lastUploadWrote = false;
+    return body;
+  }
+  await putRemote(body);
+  const seen = await fetchRaw();
+  const healed = parryBody(FakerPolicy.unionRows([seen, body], "parry"));
+  if (FakerPolicy.coversRows(healed, seen, "parry") && !FakerPolicy.coversRows(seen, healed, "parry")) {
+    await putRemote(healed);
+  }
+  try { sessionStorage.setItem("momo-parry-remote-snapshot", JSON.stringify(seen)); } catch (err) {}
+  lastUploadWrote = true;
+  return healed;
 }
 
 async function loadBoard() {
@@ -1285,31 +1346,22 @@ async function commitScore(name, remember) {
   renderBoards();
   const allowRemote = online && (!fakerOn() || FakerPolicy.plausibleParry(row.ms));
   let shared = false;
+  let failText = "";
   if (allowRemote) {
     try {
-      const remembered = JSON.parse(sessionStorage.getItem("momo-parry-remote-snapshot") || "[]");
-      const latest = await fetchRemote();
-      let union = normalize([].concat(latest, remembered, next));
-      if (!FakerPolicy.coversNames(union, latest)) throw new Error("would drop scores");
-      await putRemote(union);
-      const seen = await fetchRemote();
-      const healed = normalize([].concat(seen, union));
-      if (FakerPolicy.coversNames(healed, seen) && !FakerPolicy.coversNames(seen, healed)) {
-        await putRemote(healed);
-        union = healed;
-      }
-      try { sessionStorage.setItem("momo-parry-remote-snapshot", JSON.stringify(union)); } catch (err) {}
-      writeLocal(union);
-      lastList = FakerPolicy.tagLocal(union, union, "parry");
+      const union = await uploadMerged([row]);
+      writeLocal(normalize(union.concat(readLocal())));
+      await loadBoard();
       shared = true;
       renderBoards();
     } catch (err) {
       shared = false;
+      failText = uploadFailText(err);
     }
   }
   row.localOnly = !shared;
   if (fakerOn()) MomoFaker.tell({ type: "saved", game: "parry", row });
-  saveMsg.textContent = shared ? T().saved : T().savedLocal;
+  saveMsg.textContent = shared ? T().saved : (failText || T().savedLocal);
   saveBtn.disabled = true;
 }
 
@@ -1349,6 +1401,20 @@ document.getElementById("pause-btn").addEventListener("click", (event) => {
   event.stopPropagation();
   togglePause();
 });
+document.getElementById("upload-btn").addEventListener("click", async (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  const btn = event.currentTarget;
+  btn.disabled = true;
+  try {
+    await uploadMerged([]);
+    document.getElementById("upload-msg").textContent = lastUploadWrote ? T().uploadOk : T().uploadNone;
+    await loadBoard();
+  } catch (err) {
+    document.getElementById("upload-msg").textContent = uploadFailText(err);
+  }
+  btn.disabled = false;
+});
 
 document.addEventListener("click", (event) => {
   const btn = event.target.closest("[data-lang]");
@@ -1361,7 +1427,7 @@ document.addEventListener("click", (event) => {
 window.addEventListener("pointerdown", (event) => {
   if (fakerOn()) return;
   if (event.button !== 0) return;
-  if (event.target.closest("[data-lang], #score-form, #retry-btn, #pause-btn, .back-portal")) return;
+  if (event.target.closest("[data-lang], #score-form, #retry-btn, #pause-btn, #upload-btn, .back-portal")) return;
   if (state === "dead") return;
   event.preventDefault();
   act(performance.now());
