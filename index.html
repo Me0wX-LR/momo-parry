@@ -1152,7 +1152,7 @@ function normalize(list) {
   }
   const latest = FakerPolicy.keepLatest(rows);
   latest.sort((a, b) => b.ms - a.ms || (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
-  return latest.slice(0, KEEP_N);
+  return latest;
 }
 
 function readLocal() {
@@ -1290,11 +1290,11 @@ async function commitScore(name, remember) {
       const remembered = JSON.parse(sessionStorage.getItem("momo-parry-remote-snapshot") || "[]");
       const latest = await fetchRemote();
       let union = normalize([].concat(latest, remembered, next));
+      if (!FakerPolicy.coversNames(union, latest)) throw new Error("would drop scores");
       await putRemote(union);
       const seen = await fetchRemote();
       const healed = normalize([].concat(seen, union));
-      const seenIds = new Set(seen.map((item) => item.name + "|" + item.ms + "|" + item.at));
-      if (healed.some((item) => !seenIds.has(item.name + "|" + item.ms + "|" + item.at))) {
+      if (FakerPolicy.coversNames(healed, seen) && !FakerPolicy.coversNames(seen, healed)) {
         await putRemote(healed);
         union = healed;
       }
