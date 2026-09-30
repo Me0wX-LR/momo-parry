@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>毛毛格擋</title>
 <style>
   html, body {
@@ -11,6 +11,8 @@
     background: #000;
     color: #f4f4f4;
     font-family: "Segoe UI", "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", sans-serif;
+    overscroll-behavior: none;
+    -webkit-touch-callout: none;
   }
   body {
     min-height: 100%;
@@ -20,7 +22,7 @@
     gap: 56px;
     overflow: auto;
     user-select: none;
-    touch-action: manipulation;
+    touch-action: none;
     cursor: pointer;
   }
   body.dead { background: #808080; cursor: default; }
@@ -189,9 +191,10 @@
     align-items: center;
     justify-content: flex-start;
     overflow: auto;
-    padding: 48px 24px 64px;
+    padding: 48px 24px 24px;
     text-align: center;
-    cursor: pointer;
+    cursor: default;
+    touch-action: pan-y;
   }
   #end[hidden] { display: none !important; }
   #end-score { font-size: 72px; line-height: 1; font-weight: 700; font-variant-numeric: tabular-nums; margin: 0; }
@@ -228,13 +231,81 @@
   #end .board { width: min(520px, 100%); font-size: 16px; }
   #end .board li { color: #1a1a1a; border-bottom: 1px solid #666; }
   #end .board .mine { font-weight: 700; }
-  #end-hint { margin-top: 22px; font-size: 18px; }
+  #retry-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    width: min(520px, 100%);
+    display: flex;
+    justify-content: center;
+    margin-top: 18px;
+    padding: 14px 0 calc(14px + env(safe-area-inset-bottom));
+    background: #808080;
+  }
+  #retry-btn {
+    font: inherit;
+    font-size: 18px;
+    font-weight: 700;
+    min-height: 48px;
+    min-width: 180px;
+    padding: 12px 28px;
+    border-radius: 10px;
+    border: 2px solid #1a1a1a;
+    background: #1a1a1a;
+    color: #f4f4f4;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  #pause-btn {
+    margin-top: 12px;
+    min-height: 40px;
+    background: transparent;
+    color: #cfcfcf;
+    border: 1px solid #444;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font: inherit;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
   @media (max-width: 860px) {
-    body { flex-direction: column; gap: 20px; padding: 18px 0 28px; }
-    #stage { width: min(420px, 52vh, 88vw); }
-    .total { font-size: 64px; }
-    .readout { min-width: 0; padding: 0 20px; }
-    #end-score { font-size: 56px; }
+    body {
+      flex-direction: column;
+      justify-content: flex-start;
+      align-items: center;
+      gap: 6px;
+      min-height: 0;
+      height: 100dvh;
+      max-height: 100dvh;
+      overflow: hidden;
+      padding: env(safe-area-inset-top) 0 0;
+    }
+    #stage { width: min(92vw, 44dvh); margin-top: 6px; }
+    #banner { font-size: 32px; top: 8px; }
+    .ov-title { font-size: 26px; }
+    #overlay { padding: 16px; }
+    #overlay p { font-size: 14px; }
+    .readout {
+      min-width: 0;
+      width: 100%;
+      max-width: none;
+      padding: 0 16px calc(8px + env(safe-area-inset-bottom));
+      box-sizing: border-box;
+    }
+    .total { font-size: 48px; }
+    .unit { font-size: 20px; }
+    .rate { margin: 2px 0 6px; }
+    .status { font-size: 22px; margin: 6px 0 2px; }
+    #hp { font-size: 22px; }
+    .help, #side-board, #side-board-title { display: none; }
+    .langs { margin-top: 8px; }
+    .langs button, #pause-btn { min-height: 44px; }
+    #end { padding: 24px 16px 8px; }
+    #end-score { font-size: 48px; }
+    #end-title { font-size: 30px; margin: 12px 0 8px; }
+    #end p { font-size: 15px; }
+    #name { font-size: 16px; }
+    #retry-btn { width: min(100%, 420px); min-height: 52px; font-size: 20px; }
   }
 </style>
 </head>
@@ -264,6 +335,7 @@
     <div class="status" id="status">載入中</div>
     <div class="meta" id="meta"></div>
     <div class="help" id="help"></div>
+    <button type="button" id="pause-btn">暫停</button>
     <div class="board-title" id="side-board-title"></div>
     <ol class="board" id="side-board"></ol>
     <div class="langs" id="langs">
@@ -285,7 +357,9 @@
     </form>
     <div class="board-title" id="end-board-title"></div>
     <ol class="board" id="end-board"></ol>
-    <p id="end-hint">滑鼠左鍵重試</p>
+    <div id="retry-bar">
+      <button type="button" id="retry-btn">再試一次</button>
+    </div>
     <div class="langs">
       <button type="button" data-lang="zh-Hant">繁體</button>
       <button type="button" data-lang="en">English</button>
@@ -345,7 +419,8 @@ const STR = {
     died: "您已陣亡",
     p1: "你知道嗎？ 貓咪的瘋狂連擊反射只需 20 至 70 毫秒，而人類的極限反應速度只有 150 毫秒。當那一雙肉墊像閃電般連環襲來時，肉眼根本無法捕捉。",
     p2: "雖然你撐過了 1000 點血量的暴風雨，但從生理學角度來說，你是不可能格擋下每一拳的。",
-    revive: "滑鼠左鍵重試",
+    revive: "再試一次",
+    pauseBtn: "暫停",
     name: "名稱",
     save: "記入排行",
     saved: "已記入排行榜。",
@@ -392,7 +467,8 @@ const STR = {
     died: "YOU DIED",
     p1: "Did you know? A cat's rapid punch reflex takes only 20 to 70 milliseconds, while the absolute human maximum reaction speed is around 150 milliseconds. When those furry paws strike like lightning, they easily bypass your conscious mind.",
     p2: "You held your ground for 1000 HP, but technically speaking, it was physically impossible to parry them all.",
-    revive: "Click to Revive",
+    revive: "Retry",
+    pauseBtn: "Pause",
     name: "Name",
     save: "Save score",
     saved: "Saved to the board.",
@@ -439,7 +515,8 @@ const STR = {
     died: "您已阵亡",
     p1: "你知道吗？ 猫咪的疯狂连击反射只需 20 至 70 毫秒，而人类的极限反应速度只有 150 毫秒。当那一双肉垫像闪电般连环袭来时，肉眼根本无法捕捉。",
     p2: "虽然你撑过了 1000 点血量的暴风雨，但从生理学角度来说，你是不可能格挡下每一拳的。",
-    revive: "鼠标左键重试",
+    revive: "再试一次",
+    pauseBtn: "暂停",
     name: "名称",
     save: "记入排行",
     saved: "已记入排行榜。",
@@ -585,7 +662,8 @@ function fillEndCopy() {
   document.getElementById("end-title").textContent = t.died;
   document.getElementById("end-p1").textContent = t.p1;
   document.getElementById("end-p2").textContent = t.p2;
-  document.getElementById("end-hint").textContent = t.revive;
+  document.getElementById("retry-btn").textContent = t.revive;
+  document.getElementById("pause-btn").textContent = t.pauseBtn;
   document.getElementById("end-score").textContent = t.clock(survivedMs / 1000);
 }
 
@@ -1078,6 +1156,19 @@ async function submitScore(event) {
 
 document.getElementById("score-form").addEventListener("submit", submitScore);
 
+document.getElementById("retry-btn").addEventListener("click", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  if (state !== "dead") return;
+  act(performance.now());
+});
+
+document.getElementById("pause-btn").addEventListener("click", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  togglePause();
+});
+
 document.addEventListener("click", (event) => {
   const btn = event.target.closest("[data-lang]");
   if (!btn) return;
@@ -1088,7 +1179,8 @@ document.addEventListener("click", (event) => {
 
 window.addEventListener("pointerdown", (event) => {
   if (event.button !== 0) return;
-  if (event.target.closest("[data-lang], #score-form")) return;
+  if (event.target.closest("[data-lang], #score-form, #retry-btn, #pause-btn")) return;
+  if (state === "dead") return;
   event.preventDefault();
   act(performance.now());
 });
@@ -1102,6 +1194,10 @@ window.addEventListener("keydown", (event) => {
     return;
   }
   if (event.code === "Space") {
+    if (state === "dead") {
+      if (!event.target.closest("#retry-btn")) event.preventDefault();
+      return;
+    }
     event.preventDefault();
     act(performance.now());
   }
